@@ -1,33 +1,54 @@
+//
+// importing all needed libraries
+//
 import { Meteor } from 'meteor/meteor';
 import TelegramBot from 'node-telegram-bot-api';
 import Flickr from 'flickrapi';
 
-var flickr;
-Flickr.tokenOnly({
-  api_key: "720dc6be11c683f7351772045c4ed4c9",
-  secret: "1f8ec837ddc37e06"
-}, function(error, result) {
-  flickr = result;
-});
 
-var token = '191390975:AAG2c4_JHIRtH7Jq4s2ogEzgzS7pAC-QeSw';
-var bot = new TelegramBot(token, {polling: true});
+//
+// initialize telegram api
+//
+var telegram = new TelegramBot(Meteor.settings.telegram.token, {polling: true});
 
-bot.on('message', function (msg) {
 
+//
+// initialize flickr api
+//
+Flickr.tokenOnly(Meteor.settings.flickr, flickr_initialized_callback);
+
+
+//
+// callback fired on flickr initialization
+//
+function flickr_initialized_callback(error, flickr) {
+  if(error || typeof flickr == 'undefined') throw new Error(error);
+
+  telegram.on('message', _.partial(telegram_onmessage_callback, flickr));
+}
+
+
+var previousId;
+function telegram_onmessage_callback(flickr, msg) {
   // console.log(msg);
-  var chatId = msg.chat.id;
 
-  flickr.photos.search({
-    text: msg.text
-  }, function(err, result) {
-    if(err) { throw new Error(err); }
-    var photo = result.photos.photo[1]
-    console.log('result', 'http://www.flickr.com/photos/' + photo.id + "_" + photo.secret + ".jpg");
-    console.log('result', 'http://www.flickr.com/photos/eric/'+photo.id+'/');
-    // http://www.flickr.com/photos/132375_0ca82ae31e.jpg
+  if(previousId == msg.chat.id+'-'+msg.message_id) return;
+  previousId = msg.chat.id+'-'+msg.message_id;
+
+  flickr.photos.search({text: msg.text}, _.partial(flickr_search_callback, telegram, msg));
+}
+
+
+function flickr_search_callback(telegram, msg, err, result) {
+  if(err) throw new Error(err);
+
+  var photo = result.photos.photo[1]
+  if(typeof photo == 'undefined') {
+    telegram.sendMessage(msg.chat.id, 'no photos found');
+  } else {
     var link = 'http://www.flickr.com/photos/' + photo.id + "_" + photo.secret + ".jpg";
-    bot.sendMessage(chatId, '<a href="'+link+'">'+photo.title+'</a>', {parse_mode: "HTML"});
-  });
+    telegram.sendMessage(msg.chat.id, '<a href="'+link+'">'+msg.text+'!</a>', {parse_mode: "HTML"});
+    console.log('request: "' + msg.text + '", sent to user:', 'http://www.flickr.com/photos/' + photo.id + "_" + photo.secret + ".jpg");
+  }
+}
 
-});

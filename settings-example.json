@@ -1,0 +1,9 @@
+{
+  "telegram": {
+    "token": "replace_with_your_token"
+  },
+  "flickr": {
+    "api_key": "replace_with_your_api_key",
+    "secret": "replace_with_your_secret"
+  }
+}
