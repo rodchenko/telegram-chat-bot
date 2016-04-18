@@ -3,52 +3,32 @@
 //
 import { Meteor } from 'meteor/meteor';
 import TelegramBot from 'node-telegram-bot-api';
-import Flickr from 'flickrapi';
 
 
-//
-// initialize telegram api
-//
 var telegram = new TelegramBot(Meteor.settings.telegram.token, {polling: true});
 
 
-//
-// initialize flickr api
-//
-Flickr.tokenOnly(Meteor.settings.flickr, flickr_initialized_callback);
-
-
-//
-// callback fired on flickr initialization
-//
-function flickr_initialized_callback(error, flickr) {
-  if(error || typeof flickr == 'undefined') throw new Error(error);
-
-  telegram.on('message', _.partial(telegram_onmessage_callback, flickr));
-}
-
+telegram.on('message', Meteor.bindEnvironment(telegram_onmessage_callback));
 
 var previousId;
-function telegram_onmessage_callback(flickr, msg) {
-  // console.log(msg);
+function telegram_onmessage_callback(msg) {
+
+  msg.createAt = new Date();
+  console.log(msg);
 
   if(previousId == msg.chat.id+'-'+msg.message_id) return;
   previousId = msg.chat.id+'-'+msg.message_id;
 
-  flickr.photos.search({text: msg.text}, _.partial(flickr_search_callback, telegram, msg));
-}
-
-
-function flickr_search_callback(telegram, msg, err, result) {
-  if(err) throw new Error(err);
-
-  var photo = result.photos.photo[1]
-  if(typeof photo == 'undefined') {
-    telegram.sendMessage(msg.chat.id, 'no photos found');
+  if(msg.text == "/start") {
+    telegram.sendMessage(msg.chat.id, 'привет! мы собираем ответы');
+    var text = 'первый вопрос?';
+    telegram.sendMessage(msg.chat.id, text);
+    Messages.insert({chatId: msg.chat.id, question: text, createAt: new Date()});
   } else {
-    var link = 'http://www.flickr.com/photos/' + photo.id + "_" + photo.secret + ".jpg";
-    telegram.sendMessage(msg.chat.id, '<a href="'+link+'">'+msg.text+'!</a>', {parse_mode: "HTML"});
-    console.log('request: "' + msg.text + '", sent to user:', 'http://www.flickr.com/photos/' + photo.id + "_" + photo.secret + ".jpg");
+    var text = 'второй вопрос?';
+    telegram.sendMessage(msg.chat.id, text);
+    var prev = Messages.findOne({chatId: msg.chat.id}, {sort: {createAt: -1}});
+    Messages.update(prev._id, {$set: {answer: msg}});
   }
-}
 
+}
